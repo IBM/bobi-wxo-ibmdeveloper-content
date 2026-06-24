@@ -1,0 +1,292 @@
+# =============================================================================
+# SAMCO Demo — SQL Tool Definitions for the IBM i MCP Server
+#
+# Prototype for CLAI PAYMENTS® IBM i × watsonx Orchestrate integration.
+# Uses the SAMCO retail application on PowerVS (<your-ibmi-host>)
+# to demonstrate the pattern — same approach applies to any client schema.
+#
+# Live data verified 2026-01:
+#   SAMCO.ARTICLE  — 33 products across 10 families, prices $5–$900
+#   SAMCO.FAMILLY  — BOO, CLO, ELE, FOO, FUR, GAR, HOM, OFF, SPO, TOY
+#   SAMCO.CUSTOMER — 10 customers (Acme Corp, Global Trading SA, etc.)
+#   SAMCO."ORDER"  — 10 orders (year 2026)
+#   SAMCO.DETORD   — 22 order lines with qty, price, totals
+# =============================================================================
+
+sources:
+  samco-db:
+    host: ${DB2i_HOST}
+    user: ${DB2i_USER}
+    password: ${DB2i_PASS}
+    port: ${DB2i_PORT}
+    ignore-unauthorized: true
+
+tools:
+
+  # ── 1. Look up a product by its 6-character article ID ───────────────────
+  get_product_by_id:
+    source: samco-db
+    description: >
+      Look up a specific product by its article ID code (6 characters, e.g. 000001).
+      Returns the product name, sale price, stock price, current stock level,
+      customer order quantity, and the product category it belongs to.
+      Use this when the user provides a specific article/product code.
+    parameters:
+      - name: article_id
+        type: string
+        required: true
+        description: "6-character article ID, e.g. 000001"
+        minLength: 1
+        maxLength: 6
+    security:
+      readOnly: true
+    statement: |
+      SELECT
+        A.ARID            AS ARTICLE_ID,
+        TRIM(A.ARDESC)    AS PRODUCT_NAME,
+        A.ARSALEPR        AS SALE_PRICE,
+        A.ARWHSPR         AS STOCK_PRICE,
+        A.ARSTOCK         AS STOCK_LEVEL,
+        A.ARCUSQTY        AS PENDING_ORDER_QTY,
+        TRIM(F.FADESC)    AS CATEGORY
+      FROM SAMCO.ARTICLE A
+      LEFT JOIN SAMCO.FAMILLY F ON F.FAID = A.ARTIFA
+      WHERE A.ARID = :article_id
+        AND A.ARDEL <> 'X'
+      FETCH FIRST 1 ROWS ONLY
+
+  # ── 2. List the full product catalogue ───────────────────────────────────
+  list_all_products:
+    source: samco-db
+    description: >
+      List all available products in the SAMCO catalogue, ordered by name.
+      Returns article ID, product name, sale price, stock level, and category.
+      Use this when the user asks "what products do you have?",
+      "show me the catalogue", or "what is available?".
+    parameters:
+      - name: max_rows
+        type: integer
+        required: false
+        default: 50
+        minimum: 1
+        maximum: 100
+        description: "Maximum number of products to return (default 50)"
+    security:
+      readOnly: true
+    statement: |
+      SELECT
+        A.ARID            AS ARTICLE_ID,
+        TRIM(A.ARDESC)    AS PRODUCT_NAME,
+        A.ARSALEPR        AS SALE_PRICE,
+        A.ARSTOCK         AS STOCK_LEVEL,
+        TRIM(F.FADESC)    AS CATEGORY
+      FROM SAMCO.ARTICLE A
+      LEFT JOIN SAMCO.FAMILLY F ON F.FAID = A.ARTIFA
+      WHERE A.ARDEL <> 'X'
+      ORDER BY A.ARDESC
+      FETCH FIRST :max_rows ROWS ONLY
+
+  # ── 3. List all product categories ───────────────────────────────────────
+  list_categories:
+    source: samco-db
+    description: >
+      List all available product categories (families).
+      Categories are: Books, Clothing, Electronics, Food, Furniture,
+      Garden, Home Appliances, Office Supplies, Sports Equipment, Toys.
+      Use this when the user asks "what categories do you carry?",
+      "what kinds of products are there?", or before filtering by category.
+    parameters: []
+    security:
+      readOnly: true
+    statement: |
+      SELECT
+        FAID              AS CATEGORY_ID,
+        TRIM(FADESC)      AS CATEGORY_NAME
+      FROM SAMCO.FAMILLY
+      WHERE FADEL <> 'X'
+      ORDER BY FADESC
+
+  # ── 4. Browse products by category ───────────────────────────────────────
+  get_products_by_category:
+    source: samco-db
+    description: >
+      List all products within a specific category using the 3-letter category ID.
+      Available category IDs: BOO=Books, CLO=Clothing, ELE=Electronics,
+      FOO=Food, FUR=Furniture, GAR=Garden, HOM=Home Appliances,
+      OFF=Office Supplies, SPO=Sports Equipment, TOY=Toys.
+      Use this when the user asks about a specific product category,
+      e.g. "show me all electronics" or "what furniture do you have?".
+    parameters:
+      - name: category_id
+        type: string
+        required: true
+        description: "3-letter category ID (e.g. ELE for Electronics)"
+        enum: ["BOO", "CLO", "ELE", "FOO", "FUR", "GAR", "HOM", "OFF", "SPO", "TOY"]
+    security:
+      readOnly: true
+    statement: |
+      SELECT
+        A.ARID            AS ARTICLE_ID,
+        TRIM(A.ARDESC)    AS PRODUCT_NAME,
+        A.ARSALEPR        AS SALE_PRICE,
+        A.ARSTOCK         AS STOCK_LEVEL
+      FROM SAMCO.ARTICLE A
+      WHERE A.ARTIFA = :category_id
+        AND A.ARDEL <> 'X'
+      ORDER BY A.ARDESC
+      FETCH FIRST 50 ROWS ONLY
+
+  # ── 5. Search products by keyword ────────────────────────────────────────
+  search_products:
+    source: samco-db
+    description: >
+      Search for products whose name contains a given keyword (case-insensitive).
+      Use this when the user mentions a partial product name or a keyword,
+      e.g. "do you have anything wireless?", "find me something with coffee",
+      or "search for laptop".
+    parameters:
+      - name: keyword
+        type: string
+        required: true
+        description: "Word or partial word to search in product names (e.g. wireless, coffee, laptop)"
+        minLength: 2
+        maxLength: 50
+    security:
+      readOnly: true
+    statement: |
+      SELECT
+        A.ARID            AS ARTICLE_ID,
+        TRIM(A.ARDESC)    AS PRODUCT_NAME,
+        A.ARSALEPR        AS SALE_PRICE,
+        A.ARSTOCK         AS STOCK_LEVEL,
+        TRIM(F.FADESC)    AS CATEGORY
+      FROM SAMCO.ARTICLE A
+      LEFT JOIN SAMCO.FAMILLY F ON F.FAID = A.ARTIFA
+      WHERE UPPER(A.ARDESC) LIKE '%' CONCAT UPPER(:keyword) CONCAT '%'
+        AND A.ARDEL <> 'X'
+      ORDER BY A.ARDESC
+      FETCH FIRST 20 ROWS ONLY
+
+  # ── 6. Look up a customer by ID ───────────────────────────────────────────
+  get_customer:
+    source: samco-db
+    description: >
+      Look up a customer's profile by their numeric customer ID.
+      Returns name, city, country, credit limit, and outstanding credit.
+      Use this when the user provides a customer ID or asks
+      "who is customer 1?" or "show me details for customer X".
+    parameters:
+      - name: customer_id
+        type: integer
+        required: true
+        description: "Numeric customer ID (1–10 in demo data, e.g. 1 for Acme Corporation)"
+        minimum: 1
+        maximum: 99999
+    security:
+      readOnly: true
+    statement: |
+      SELECT
+        CUID              AS CUSTOMER_ID,
+        TRIM(CUSTNM)      AS CUSTOMER_NAME,
+        TRIM(CUCITY)      AS CITY,
+        TRIM(CUCOUN)      AS COUNTRY,
+        CULIMCRE          AS CREDIT_LIMIT,
+        CUCREDIT          AS OUTSTANDING_CREDIT
+      FROM SAMCO.CUSTOMER
+      WHERE CUID = :customer_id
+        AND CUDEL <> 'X'
+      FETCH FIRST 1 ROWS ONLY
+
+  # ── 7. Get order history for a customer ──────────────────────────────────
+  get_customer_orders:
+    source: samco-db
+    description: >
+      Retrieve the order history for a specific customer by their customer ID.
+      Returns order number, year, order date, delivery date, and close date.
+      Use this when the user asks "show me orders for customer X",
+      "what orders has Acme placed?", or "show me order history".
+    parameters:
+      - name: customer_id
+        type: integer
+        required: true
+        description: "Numeric customer ID (e.g. 1 for Acme Corporation)"
+        minimum: 1
+        maximum: 99999
+    security:
+      readOnly: true
+    statement: |
+      SELECT
+        O.ORID            AS ORDER_NUMBER,
+        O.ORYEAR          AS YEAR,
+        O.ORDATE          AS ORDER_DATE,
+        O.ORDATDEL        AS EXPECTED_DELIVERY,
+        O.ORDATCLO        AS CLOSE_DATE,
+        TRIM(C.CUSTNM)    AS CUSTOMER_NAME
+      FROM SAMCO."ORDER" O
+      JOIN SAMCO.CUSTOMER C ON C.CUID = O.ORCUID
+      WHERE O.ORCUID = :customer_id
+        AND C.CUDEL <> 'X'
+      ORDER BY O.ORYEAR DESC, O.ORID DESC
+      FETCH FIRST 20 ROWS ONLY
+
+  # ── 8. Get order line detail ──────────────────────────────────────────────
+  get_order_detail:
+    source: samco-db
+    description: >
+      Get the full line-by-line breakdown of a specific order: each product
+      ordered, quantities, unit price, line total, and total with VAT.
+      Use this when the user asks "what was in order 1?",
+      "show me the details of order X from year 2026",
+      or "what did customer X order?".
+    parameters:
+      - name: order_id
+        type: integer
+        required: true
+        description: "Order number (e.g. 1)"
+        minimum: 1
+        maximum: 999999
+      - name: order_year
+        type: integer
+        required: true
+        description: "Order year (e.g. 2026)"
+        minimum: 2000
+        maximum: 2099
+    security:
+      readOnly: true
+    statement: |
+      SELECT
+        D.ODLINE          AS LINE,
+        D.ODARID          AS ARTICLE_ID,
+        TRIM(A.ARDESC)    AS PRODUCT_NAME,
+        D.ODQTY           AS QTY_ORDERED,
+        D.ODQTYLIV        AS QTY_DELIVERED,
+        D.ODPRICE         AS UNIT_PRICE,
+        D.ODTOT           AS LINE_TOTAL,
+        D.ODTOTVAT        AS LINE_TOTAL_WITH_VAT
+      FROM SAMCO.DETORD D
+      JOIN SAMCO.ARTICLE A ON A.ARID = D.ODARID
+      WHERE D.ODORID = :order_id
+        AND D.ODYEAR  = :order_year
+      ORDER BY D.ODLINE
+
+toolsets:
+  samco_catalogue:
+    title: "SAMCO Product Catalogue"
+    description: >
+      Tools for browsing the SAMCO product catalogue on IBM i DB2.
+      Search, filter by category, or look up a specific article.
+    tools:
+      - get_product_by_id
+      - list_all_products
+      - list_categories
+      - get_products_by_category
+      - search_products
+
+  samco_orders:
+    title: "SAMCO Customer & Order Data"
+    description: >
+      Tools for looking up customer profiles and order history on IBM i DB2.
+    tools:
+      - get_customer
+      - get_customer_orders
+      - get_order_detail

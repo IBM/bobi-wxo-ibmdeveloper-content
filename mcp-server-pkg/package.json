@@ -1,0 +1,14 @@
+{
+  "name": "clai-ibmi-mcp-server",
+  "version": "1.0.0",
+  "description": "IBM i MCP Server for CLAI PAYMENTS — SAMCO retail demo",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ./node_modules/@ibm/ibmi-mcp-server/dist/index.js --transport stdio --tools ./payments-services.yaml"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@ibm/ibmi-mcp-server": "latest"
+  }
+}

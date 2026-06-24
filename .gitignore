@@ -1,0 +1,35 @@
+# SAMCO Retail Prototype — .gitignore
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+workflow/workflow.env
+ibmi-deploy/ibmi-deploy.env.local
+
+# ── RSA keys ──────────────────────────────────────────────────────────────────
+secrets/private.pem
+secrets/public.pem
+secrets/*.pem
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
+*node_modules
+
+# ── Build artefacts ───────────────────────────────────────────────────────────
+*.zip
+samco-ibmi-mcp-server.zip
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+*.log
+
+# ── Legacy (renamed) ─────────────────────────────────────────────────────────
+workflow.env
+gitignore.txt
+
+.env
+secrets/private.pem
+secrets/public.pem
+secrets/*.pem
+.DS_Store
+node_modules/
+*.log
+workflow.env
