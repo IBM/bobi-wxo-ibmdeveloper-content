@@ -8,8 +8,7 @@
 
 ## Architecture
 
-<img width="1761" height="595" alt="archsample3" src="https://github.com/user-attachments/assets/9c8dc6e9-aa4f-4942-a25d-488561e1beac" />
-
+<img width="1774" height="887" alt="samplearch4" src="https://github.com/user-attachments/assets/8c8fd4e0-94d9-40a1-880b-e1349e223fd6" />
 
 ---
 
