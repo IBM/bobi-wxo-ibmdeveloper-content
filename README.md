@@ -8,23 +8,8 @@
 
 ## Architecture
 
-```
-Client (chat / webchat)
-        │
-        ▼
-watsonx Orchestrate Agent  (samco_retail_service_agent)
-        │  Remote MCP Toolkit — Bearer Token auth
-        │  transport: streamable_http
-        ▼
-IBM i MCP Server  (Docker, port 3010)
-  ├── get_service_info
-  ├── list_active_services
-  ├── find_services_by_type
-  └── search_services_by_name
-        │  WebSocket (Mapepire, port 8076)
-        ▼
-DB2 for i  ──  YOUR_LIBRARY.SERVICES table
-```
+<img width="1774" height="887" alt="samplearch4" src="https://github.com/user-attachments/assets/8c8fd4e0-94d9-40a1-880b-e1349e223fd6" />
+
 
 ---
 
