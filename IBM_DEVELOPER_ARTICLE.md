@@ -426,14 +426,14 @@ connection to the IBM i system. Steps 1–3 require only your Mac — no IBM i i
    - Select the `bob-premium-ibmi-*.vsix` file provided by your instructor or IBM representative
    - Reload Bob when prompted
   
-  [image-1](doc/src/images/1.png)
+  ![image-1](doc/src/images/1.png)
 
 4. Verify installation — the following should now be available in the **mode selector**
    (top-right of the Bob chat panel):
    - **ℹ️ IBM i Developer** — for RPG, CL, DDS, compile actions, schema exploration
    - **🛢️ IBM i Database** — for DB2 for i SQL generation and optimization
   
-  [image-2](doc/src/images/2.png)
+  ![image-2](doc/src/images/2.png)
 
 > **What the IBM i Premium Package adds:**
 > IBM i Developer and Database modes, 34 auto-loading IBM i skills (RPG, CL, DDS, DB2),
