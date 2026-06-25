@@ -5,7 +5,7 @@ using the IBM i MCP Server, Bob, and zero custom application code**
 
 ---
 
-**Authors:** *(your name/s here)*  
+**Authors:** Brunda Reddy, Manoj Jahgirdar, Pooja Holkar
 **Published:** June 2026  
 **Type:** Tutorial  
 **Read time:** 20 minutes  
@@ -89,76 +89,73 @@ By the end of this tutorial you will have:
 
 ## Prerequisites
 
-### IBM i system
+1. IBM i system
+    - IBM i V7R3M0 or higher (this tutorial uses V7R6M0 on PowerVS)
+    - Node.js v18 or higher installed via IBM i Open Source Package Manager (yum / ACS)
+    - npm installed alongside Node.js
+    - **Mapepire** service running on port 8076 — the DB2 for i connectivity layer used by the
+    IBM i MCP Server to execute SQL queries
+    - SSH access with a user that has DB2 `*USE` (read) authority on the target schema
 
-- IBM i V7R3M0 or higher (this tutorial uses V7R6M0 on PowerVS)
-- Node.js v18 or higher installed via IBM i Open Source Package Manager (yum / ACS)
-- npm installed alongside Node.js
-- **Mapepire** service running on port 8076 — the DB2 for i connectivity layer used by the
-  IBM i MCP Server to execute SQL queries
-- SSH access with a user that has DB2 `*USE` (read) authority on the target schema
+    > **What is Mapepire?** Mapepire is IBM's DB2 for i connectivity layer. It runs as a service
+    > on port 8076 and exposes a WebSocket-based SQL execution API. The IBM i MCP Server uses it
+    > to run parameterized DB2 queries from Node.js without requiring a JDBC driver. If Mapepire
+    > is not installed on your system, follow the
+    > [Mapepire setup guide](https://ibm-d95bab6e.mintlify.app/setup-mapepire).
 
-> **What is Mapepire?** Mapepire is IBM's DB2 for i connectivity layer. It runs as a service
-> on port 8076 and exposes a WebSocket-based SQL execution API. The IBM i MCP Server uses it
-> to run parameterized DB2 queries from Node.js without requiring a JDBC driver. If Mapepire
-> is not installed on your system, follow the
-> [Mapepire setup guide](https://ibm-d95bab6e.mintlify.app/setup-mapepire).
+2. Local machine (Mac or Linux)
 
-### Local machine (Mac or Linux)
+    - **Bob IDE** installed (VS Code-based)
+    - **IBM i Premium Package** `.vsix` — provides IBM i Developer mode, IBM i Database mode,
+      34 IBM i skills, built-in workflows, and the IBM i MCP tools
+    - **Code for IBM i extension pack** — provides the IBM i connection, member browser, and
+      compile actions
+    - Python virtual environment (`.venv`) with the watsonx Orchestrate ADK:
+      ```bash
+      pip install ibm-watsonx-orchestrate
+      orchestrate --version   # should show ADK Version: 2.x
+      ```
+    - `ngrok` authenticated for dev/demo connectivity:
+      ```bash
+      brew install ngrok/ngrok/ngrok
+      ngrok config add-authtoken <your-token>
+      ```
+    - `sshpass` — allows non-interactive SSH/scp with a password (avoids repeated password
+      prompts when copying files to IBM i):
+      ```bash
+      # macOS
+      brew install hudochenkov/sshpass/sshpass
 
-- **Bob IDE** installed (VS Code-based)
-- **IBM i Premium Package** `.vsix` — provides IBM i Developer mode, IBM i Database mode,
-  34 IBM i skills, built-in workflows, and the IBM i MCP tools
-- **Code for IBM i extension pack** — provides the IBM i connection, member browser, and
-  compile actions
-- Python virtual environment (`.venv`) with the watsonx Orchestrate ADK:
-  ```bash
-  pip install ibm-watsonx-orchestrate
-  orchestrate --version   # should show ADK Version: 2.x
-  ```
-- `ngrok` authenticated for dev/demo connectivity:
-  ```bash
-  brew install ngrok/ngrok/ngrok
-  ngrok config add-authtoken <your-token>
-  ```
-- `sshpass` — allows non-interactive SSH/scp with a password (avoids repeated password
-  prompts when copying files to IBM i):
-  ```bash
-  # macOS
-  brew install hudochenkov/sshpass/sshpass
+      # Verify
+      sshpass -V
+      # Expected: sshpass 1.x
+      ```
+      Once installed, prefix any `ssh` or `scp` command with `sshpass -p '<password>'`:
+      ```bash
+      # SSH without password prompt
+      sshpass -p '<your-ibmi-password>' ssh <ibmi-user>@<your-ibmi-host>
 
-  # Verify
-  sshpass -V
-  # Expected: sshpass 1.x
-  ```
-  Once installed, prefix any `ssh` or `scp` command with `sshpass -p '<password>'`:
-  ```bash
-  # SSH without password prompt
-  sshpass -p '<your-ibmi-password>' ssh <ibmi-user>@<your-ibmi-host>
+      # scp without password prompt
+      sshpass -p '<your-ibmi-password>' scp \
+        samco-retail-prototype/tools/retail-services.yaml \
+        <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/
+      ```
+      > ⚠️ Avoid embedding passwords in shell history. Use an environment variable instead:
+      > ```bash
+      > export IBMI_PASS='<your-ibmi-password>'
+      > sshpass -p "$IBMI_PASS" ssh <ibmi-user>@<your-ibmi-host>
+      > ```
+      > Alternatively, set up **SSH key authentication** (see Step 6a) to avoid passwords entirely.
 
-  # scp without password prompt
-  sshpass -p '<your-ibmi-password>' scp \
-    samco-retail-prototype/tools/retail-services.yaml \
-    <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/
-  ```
-  > ⚠️ Avoid embedding passwords in shell history. Use an environment variable instead:
-  > ```bash
-  > export IBMI_PASS='<your-ibmi-password>'
-  > sshpass -p "$IBMI_PASS" ssh <ibmi-user>@<your-ibmi-host>
-  > ```
-  > Alternatively, set up **SSH key authentication** (see Step 6a) to avoid passwords entirely.
+3. watsonx Orchestrate
 
-### watsonx Orchestrate
+    - Active watsonx Orchestrate SaaS account with ADK environment configured
 
-- Active watsonx Orchestrate SaaS account with ADK environment configured
+4. Network connectivity — how to reach your IBM i system
 
----
-
-### Network connectivity — how to reach your IBM i system
-
-This is the **most common blocker** for first-time setups. Your local machine must be able
-to reach IBM i on **port 22 (SSH)** and **port 3011 (MCP HTTP)**. The right approach
-depends on who is running the IBM i system.
+    This is the **most common blocker** for first-time setups. Your local machine must be able
+    to reach IBM i on **port 22 (SSH)** and **port 3011 (MCP HTTP)**. The right approach
+    depends on who is running the IBM i system.
 
 ---
 
@@ -253,35 +250,9 @@ Before writing a single command, it helps to understand the three-layer architec
 that makes this integration work.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                                                                     │
-│  User (Orchestrate chat)                                            │
-│       │                                                             │
-│       ▼                                                             │
-│  watsonx Orchestrate                                                │
-│  ├─ Native agent: samco_retail_agent                                │
-│  │  LLM: groq/openai/gpt-oss-120b                                   │
-│  │  → knows tool names only                                         │
-│  └─ MCP toolkit: samco-ibmi-mcp                                      │
-│     → stores the IBM i endpoint URL                                 │
-│       │                                                             │
-│       │  HTTPS (MCP streamable_http)                                │
-│       ▼                                                             │
-│  [ngrok tunnel]  ← dev/demo only                                    │
-│  (IBM Cloud Transit Gateway for production)                         │
-│       │                                                             │
-│       │  HTTP → port 3011                                           │
-│       ▼                                                             │
-│  IBM i PASE — @ibm/ibmi-mcp-server v0.5.1                          │
-│  Node.js v20, listening on 0.0.0.0:3011                             │
-│       │                                                             │
-│       │  Mapepire (localhost:8076)                                  │
-│       ▼                                                             │
-│  DB2 for i  (IBM i V7R6M0, PowerVS)                                 │
-│  Schema: SAMCO                                                      │
-│  Tables: ARTICLE, FAMILLY, CUSTOMER, "ORDER", DETORD                │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+
+<img width="1774" height="887" alt="samplearch4" src="https://github.com/user-attachments/assets/8c8fd4e0-94d9-40a1-880b-e1349e223fd6" />
+
 ```
 
 **Key design principle:** The agent stores only tool names. The MCP toolkit stores the IBM i
@@ -441,8 +412,6 @@ CNT   TBL
 
 Once all five row counts match, SAMCO is fully deployed and ready for the MCP server in Part 2.
 
----
-
 ## Part 1 — Install Bob and connect to IBM i
 
 This part covers the one-time setup of Bob with the IBM i plugins and establishing a live
@@ -459,19 +428,21 @@ connection to the IBM i system. Steps 1–3 require only your Mac — no IBM i i
    - In Bob, press `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) → **Extensions: Install from VSIX…**
    - Select the `bob-premium-ibmi-*.vsix` file provided by your instructor or IBM representative
    - Reload Bob when prompted
+  
+  [image-1](doc/src/images/1.png)
 
 4. Verify installation — the following should now be available in the **mode selector**
    (top-right of the Bob chat panel):
    - **ℹ️ IBM i Developer** — for RPG, CL, DDS, compile actions, schema exploration
    - **🛢️ IBM i Database** — for DB2 for i SQL generation and optimization
+  
+  [image-2](doc/src/images/2.png)
 
 > **What the IBM i Premium Package adds:**
 > IBM i Developer and Database modes, 34 auto-loading IBM i skills (RPG, CL, DDS, DB2),
 > built-in workflows (DDS to SQL, Fixed to Free), slash commands (`/erd`), live schema
 > context injection, and all IBM i-specific tools (`read_member`, `execute_cl_command`,
 > `execute_sql_statement`, `convert_rpg_source`, and more).
-
----
 
 ### Step 2. Install the Code for IBM i extension pack
 
@@ -494,11 +465,11 @@ Ctrl+Shift+P → Extensions: Install from VSIX… → select file
 > Refer to the [Code for IBM i documentation](https://codefori.github.io/docs/) for full
 > installation details and screenshots.
 
----
-
 ### Step 3. Create an IBM i connection in Bob
 
 1. In the left sidebar of Bob, click the **IBM i icon** (the panel added by Code for IBM i).
+
+  [image-3](doc/src/images/3.png)
 
 2. Click **New Connection** and enter your system details:
 
@@ -508,41 +479,26 @@ Ctrl+Shift+P → Extensions: Install from VSIX… → select file
    | **User** | `<IBMI-USER>` (IBM i user profiles are uppercase) |
    | **Password** | your IBM i password |
    | **Port** | `22` (SSH — default) |
+  
+  [image-4](doc/src/images/4.png)
 
 3. Click **Connect**. On first connection, Bob may prompt you to accept the host key — click
    **Accept**.
+  
+  [image-6](doc/src/images/6.png)
 
-4. Once connected, expand the **Library Browser** in the left sidebar and navigate to
-   `SAMCO` to confirm the connection is live.
+4. Once connected, expand the **User Library List** in the left sidebar and click on **Add Library to list** and enter `SAMCO` in the text box.
 
-5. **Add SAMCO to the library list from the UI** — this ensures Bob's compile actions and SQL
-   execution find SAMCO objects automatically.
-
-   In the Code for IBM i left panel, locate your connection and click the
-   **User Library List** section (the book-stack icon). Then:
-
-   - Click the **+** (Add library) button
-   - Type `SAMCO` and press **Enter**
-   - `SAMCO` should now appear in the library list entries
-
-   ![Code for IBM i — User Library List panel showing SAMCO added](pics/step3-library-list.png)
-
-   Alternatively, run from any Bob terminal or IBM i shell session:
-   ```cl
-   ADDLIBLE LIB(SAMCO)
-   ```
-
-   > ⚠️ **Why this matters:** Without SAMCO in the library list, Bob's `execute_sql_statement`
-   > calls that use unqualified table names will fail with *object not found*. Always use fully
-   > qualified names (`SAMCO.ARTICLE`) in the SQL tools YAML — and confirm SAMCO is in the
-   > library list before running verification queries in Step 5.
+  [image-8](doc/src/images/8.png)
+> ⚠️ **Why this matters:** Without SAMCO in the library list, Bob's `execute_sql_statement`
+> calls that use unqualified table names will fail with *object not found*. Always use fully
+> qualified names (`SAMCO.ARTICLE`) in the SQL tools YAML — and confirm SAMCO is in the
+> library list before running verification queries in Part 4.
 
 > **PowerVS note:** If your IBM i is on IBM Cloud PowerVS with only a public IP and you need
 > a 5250 terminal session from your workstation, you may need an SSH tunnel. Ask your IBM
 > administrator or see the
 > [PowerVS SSH tunnel guide](https://cloud.ibm.com/docs/power-iaas?topic=power-iaas-connect-ibmi#ssh-tunneling).
-
----
 
 ## Part 2 — Deploy the MCP Server on IBM i
 
@@ -550,171 +506,98 @@ This part deploys the MCP server as a persistent HTTP service directly on the IB
 so that watsonx Orchestrate can call it remotely. All commands in this part run **on
 the IBM i via SSH** from your local Mac — unless explicitly stated otherwise.
 
-> **Why run the MCP server on the IBM i itself?**
+> Note: **Why run the MCP server on the IBM i itself?**
 > The MCP server connects to DB2 via Mapepire on `localhost:8076`. Running it directly
 > on the IBM i means zero network latency to the database, no firewall rules to open
 > between machines, and no credentials transmitted over the network. The only external
 > port exposed is the MCP HTTP port (3011).
 
----
-
 ### Step 4. SSH into IBM i and install the MCP Server package
 
-#### 4a — Open an SSH session from your Mac
+#### 4.1 — Open an SSH session from your Mac
 
-Open a terminal on your Mac and connect to the IBM i:
+- Open a terminal on your Mac and connect to the IBM i:
+  ```bash
+  ssh <ibmi-user>@<your-ibmi-host>
+  ```
 
-```bash
-ssh <ibmi-user>@<your-ibmi-host>
-```
+- You will see the IBM i PASE shell prompt:
 
-You will see the IBM i PASE shell prompt:
+  ```
+  -bash-5.2$
+  ```
+  [image-9](doc/src/images/9.png)
+  > Note: On first connection, SSH will ask you to accept the host fingerprint — type `yes`.
 
-```
-$
-```
+  > Note: If you get a timeout, verify the hostname resolves and port 22 is open:
+  > ```bash
+  > # From your Mac, before SSH:
+  > ping <your-ibmi-host>
+  > nc -zv <your-ibmi-host> 22
+  > ```
 
-> **Connection details used in this tutorial:**
-> - Host: `<your-ibmi-host>` (PowerVS IBM i)
-> - User: `<ibmi-user>`
-> - Port: `22` (SSH default)
-> - Password: your IBM i password (prompted on first connect)
->
-> On first connection, SSH will ask you to accept the host fingerprint — type `yes`.
+#### 4.2 — Set up the PASE environment in IBM i
 
-If you get a timeout, verify the hostname resolves and port 22 is open:
-```bash
-# From your Mac, before SSH:
-ping <your-ibmi-host>
-nc -zv <your-ibmi-host> 22
-```
-
-#### 4b — Set up the PASE environment
-
-Once connected, add the IBM i open-source tools to your PATH. This makes `node`, `npm`,
+- Once connected, add the IBM i open-source tools to your PATH. This makes `node`, `npm`,
 `git`, and other PASE tools available without typing the full path each time:
 
-```bash
-export PATH=/QOpenSys/pkgs/bin:$PATH
-```
+  ```bash
+  export PATH=/QOpenSys/pkgs/bin:$PATH
+  ```
 
-Verify Node.js is available (required for the MCP server):
+- Verify Node.js is available (required for the MCP server):
 
-```bash
-node --version
-# Expected: v20.20.1  (or any v18+)
+  ```bash
+  node --version
+  # Expected: v20.20.1  (or any v18+)
 
-npm --version
-# Expected: 10.8.2  (or any v8+)
-```
+  npm --version
+  # Expected: 10.8.2  (or any v8+)
+  ```
 
-> If `node` is not found, install it via yum before continuing:
-> ```bash
-> yum install nodejs20
-> ```
+  > Note: If `node` is not found, install it via yum before continuing:
+  > ```bash
+  > yum install nodejs20
+  > ```
 
-#### 4c — Create the deployment directory
+#### 4.3 - Clone the repository to get the files
 
-Create a dedicated directory for the MCP server and all its files:
+- In IBM i terminal, run the following command to clone the repo with all the files:
 
-```bash
-mkdir -p /home/<ibmi-user>/samco-mcp
-cd /home/<ibmi-user>/samco-mcp
-```
+  ```bash
+  git clone https://github.com/IBM/bobi-wxo-ibmdeveloper-content.git
+  ```
 
-Verify you are in the right place:
-```bash
-pwd
-# Expected: /home/<ibmi-user>/samco-mcp
-```
+- And then go to the root of the cloned repo:
 
-#### 4d — Copy files from Bob / your Mac to IBM i using scp
+  ```bash
+  cd bobi-wxo-ibmdeveloper-content/
+  ```
 
-If you already have the `.env` or `retail-services.yaml` files on your local Mac
-(e.g. edited in Bob), copy them to IBM i using `scp` **from a terminal on your Mac**
-(not from the SSH session).
+#### 4.5 — Install the IBM i MCP Server npm package
 
-> `scp` (Secure Copy) uses the same SSH credentials as your SSH session — no extra setup needed.
+- Navigate to the **mcp-server-pkg** directoy:
 
-**Copy a single file to IBM i:**
-```bash
-# Run on your Mac — NOT inside the SSH session
-scp /path/to/local/file.yaml <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/
-```
+  ```bash
+  cd mcp-server-pkg/
+  ```
 
-**Copy the retail-services.yaml from your Bob workspace:**
-```bash
-# From your Mac terminal (adjust path to your actual workspace)
-scp /Users/yourname/Documents/selectT/IBMi/samco-retail-prototype/tools/retail-services.yaml \
-    <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/retail-services.yaml
-```
+- Install the node dependencies:
 
-**Copy the .env config file:**
-```bash
-scp /Users/yourname/Documents/selectT/IBMi/samco-retail-prototype/.env \
-    <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/.env
-```
+  ```bash
+  npm install @ibm/ibmi-mcp-server@latest --save
+  ```
 
-**Copy multiple files at once:**
-```bash
-scp \
-  samco-retail-prototype/tools/retail-services.yaml \
-  samco-retail-prototype/ibmi-deploy/ibmi-deploy.env \
-  <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/
-```
-
-**Copy an entire directory recursively:**
-```bash
-scp -r samco-retail-prototype/ibmi-deploy/ \
-    <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/
-```
-
-> 💡 **Tip — use Bob's integrated terminal:** In Bob, open a terminal with `` Ctrl+` ``
-> and run `scp` from there. The working directory is your workspace root so you can use
-> relative paths:
-> ```bash
-> scp samco-retail-prototype/tools/retail-services.yaml \
->     <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/
-> ```
-
-After copying, go back to your SSH session on IBM i and verify the files arrived:
-```bash
-ls -la /home/<ibmi-user>/samco-mcp/
-```
-
-> **Alternative — write files directly via heredoc:** If you prefer not to use `scp`, you
-> can paste file contents directly into the SSH session using the `cat > file << 'EOF' ... EOF`
-> pattern shown in Steps 7 and 8. Both approaches produce identical results.
-
-#### 4e — Install the IBM i MCP Server npm package
-
-```bash
-npm install @ibm/ibmi-mcp-server@latest --save
-```
-
-This downloads the package and all its dependencies from the npm registry.
+- This downloads the package and all its dependencies from the npm registry.
 npm will show download progress. Expected final lines:
 
-```
-added 87 packages in 45s
-```
+  ```
+  added 87 packages in 45s
+  ```
 
-Verify the package installed correctly:
-
-```bash
-ls node_modules/@ibm/ibmi-mcp-server/dist/index.js
-# Expected output: node_modules/@ibm/ibmi-mcp-server/dist/index.js
-```
-
-Check the exact version installed:
-```bash
-cat node_modules/@ibm/ibmi-mcp-server/package.json | grep '"version"'
-# Expected: "version": "0.5.1"
-```
-
-> **Package details:** Entry point is `dist/index.js`. This tutorial uses the
-> **`http` transport** — the only supported mode for remote access from watsonx Orchestrate
-> and Bob ADK v2. The `stdio` transport is not compatible with ADK v2.
+  > **Package details:** Entry point is `dist/index.js`. This tutorial uses the
+  > **`http` transport** — the only supported mode for remote access from watsonx Orchestrate
+  > and Bob ADK v2. The `stdio` transport is not compatible with ADK v2.
 
 ---
 
@@ -722,7 +605,7 @@ cat node_modules/@ibm/ibmi-mcp-server/package.json | grep '"version"'
 
 Still on the IBM i (SSH session), create the `.env` configuration file.
 
-#### 5a — Verify Mapepire is running on port 8076
+#### 5.1 — Verify Mapepire is running on port 8076
 
 Before writing the config, confirm Mapepire is available — the MCP server cannot start
 without it:
@@ -1415,7 +1298,7 @@ ngrok http <your-ibmi-host>:3011
 
 ngrok prints a public URL:
 ```
-Forwarding  https://<your-ngrok-subdomain>.ngrok-free.app → http://<host>:3011
+Forwarding  https://unpresiding-unintendedly-silvia.ngrok-free.dev → http://<host>:3011
 ```
 
 Verify the tunnel:
