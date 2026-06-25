@@ -466,7 +466,7 @@ Ctrl+Shift+P → Extensions: Install from VSIX… → select file
 
 1. In the left sidebar of Bob, click the **IBM i icon** (the panel added by Code for IBM i).
 
-  [image-3](doc/src/images/3.png)
+  ![image-3](doc/src/images/3.png)
 
 2. Click **New Connection** and enter your system details:
 
@@ -477,16 +477,16 @@ Ctrl+Shift+P → Extensions: Install from VSIX… → select file
    | **Password** | your IBM i password |
    | **Port** | `22` (SSH — default) |
   
-  [image-4](doc/src/images/4.png)
+  ![image-4](doc/src/images/4.png)
 
 3. Click **Connect**. On first connection, Bob may prompt you to accept the host key — click
    **Accept**.
   
-  [image-6](doc/src/images/6.png)
+  ![image-6](doc/src/images/6.png)
 
 4. Once connected, expand the **User Library List** in the left sidebar and click on **Add Library to list** and enter `SAMCO` in the text box.
 
-  [image-8](doc/src/images/8.png)
+  ![image-8](doc/src/images/8.png)
 > ⚠️ **Why this matters:** Without SAMCO in the library list, Bob's `execute_sql_statement`
 > calls that use unqualified table names will fail with *object not found*. Always use fully
 > qualified names (`SAMCO.ARTICLE`) in the SQL tools YAML — and confirm SAMCO is in the
@@ -523,7 +523,7 @@ the IBM i via SSH** from your local Mac — unless explicitly stated otherwise.
   ```
   -bash-5.2$
   ```
-  [image-9](doc/src/images/9.png)
+  ![image-9](doc/src/images/9.png)
   > Note: On first connection, SSH will ask you to accept the host fingerprint — type `yes`.
 
   > Note: If you get a timeout, verify the hostname resolves and port 22 is open:
