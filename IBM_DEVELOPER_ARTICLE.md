@@ -249,11 +249,8 @@ required for SSH because ITZ instances have their own public endpoints.
 Before writing a single command, it helps to understand the three-layer architecture
 that makes this integration work.
 
-```
-
 <img width="1774" height="887" alt="samplearch4" src="https://github.com/user-attachments/assets/8c8fd4e0-94d9-40a1-880b-e1349e223fd6" />
 
-```
 
 **Key design principle:** The agent stores only tool names. The MCP toolkit stores the IBM i
 endpoint URL. The IBM i `.env` stores DB2 credentials. These three layers are deliberately
