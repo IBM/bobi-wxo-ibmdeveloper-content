@@ -575,7 +575,7 @@ the IBM i via SSH** from your local Mac — unless explicitly stated otherwise.
   cd bobi-wxo-ibmdeveloper-content/
   ```
 
-#### 4.5 — Install the IBM i MCP Server npm package
+#### 4.4 — Install the IBM i MCP Server npm package
 
 - Navigate to the **mcp-server-pkg** directoy:
 
