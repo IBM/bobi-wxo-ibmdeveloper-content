@@ -120,6 +120,11 @@ By the end of this tutorial you will have:
       brew install ngrok/ngrok/ngrok
       ngrok config add-authtoken <your-token>
       ```
+   - git clone the repository on your local
+     ```bash
+     git clone https://github.com/IBM/bobi-wxo-ibmdeveloper-content.git
+     cd bobi-wxo-ibmdeveloper-content
+      ```
     - `sshpass` — allows non-interactive SSH/scp with a password (avoids repeated password
       prompts when copying files to IBM i):
       ```bash
@@ -132,12 +137,9 @@ By the end of this tutorial you will have:
       ```
       Once installed, prefix any `ssh` or `scp` command with `sshpass -p '<password>'`:
       ```bash
-      # SSH without password prompt
-      sshpass -p '<your-ibmi-password>' ssh <ibmi-user>@<your-ibmi-host>
-
       # scp without password prompt
       sshpass -p '<your-ibmi-password>' scp \
-        samco-retail-prototype/tools/retail-services.yaml \
+      tools/retail-services.yaml \
         <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/
       ```
       > ⚠️ Avoid embedding passwords in shell history. Use an environment variable instead:
