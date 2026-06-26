@@ -140,7 +140,7 @@ By the end of this tutorial you will have:
       # scp without password prompt
       sshpass -p '<your-ibmi-password>' scp \
       tools/retail-services.yaml \
-        <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/mcp-server-pkg/
+        <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/
       ```
       > ⚠️ Avoid embedding passwords in shell history. Use an environment variable instead:
       > ```bash
