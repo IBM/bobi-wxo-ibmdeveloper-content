@@ -562,11 +562,11 @@ or contact your IBM i administrator.
 
 #### 2.2 — Write the .env file
 
-Create `/home/<ibmi-user>/mcp-server-pkg/.env` with the following content.
+Create `/home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/.env` with the following content.
 Use `cat` with a here-document to write it in one command from the SSH session:
 
 ```bash
-cat > /home/<ibmi-user>/mcp-server-pkg/.env << 'EOF'
+cat > /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/.env << 'EOF'
 # =============================================================
 # IBM i MCP Server — SAMCO Retail demo configuration
 # =============================================================
@@ -594,7 +594,7 @@ EOF
 
 Verify the file was written correctly:
 ```bash
-cat /home/<ibmi-user>/mcp-server-pkg/.env
+cat /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/.env
 ```
 
 #### 2.3 — Configuration values explained
@@ -612,7 +612,7 @@ cat /home/<ibmi-user>/mcp-server-pkg/.env
 > ⚠️ **Security note:** The `.env` file contains the DB2 password in plain text. Restrict
 > its permissions immediately:
 > ```bash
-> chmod 600 /home/<ibmi-user>/mcp-server-pkg/.env
+> chmod 600 /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/.env
 > ```
 
 ---
@@ -973,10 +973,10 @@ LIKE '%' || UPPER(:keyword) || '%'            ✅  also valid, but CONCAT is mor
 
 Verify the file was written:
 ```bash
-wc -l /home/<ibmi-user>/mcp-server-pkg/retail-services.yaml
+wc -l /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/retail-services.yaml
 # Expected: ~130 lines
 
-head -5 /home/<ibmi-user>/mcp-server-pkg/retail-services.yaml
+head -5 /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/retail-services.yaml
 # Expected: the header comment block
 ```
 
