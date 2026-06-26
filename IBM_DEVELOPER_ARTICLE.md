@@ -355,6 +355,8 @@ SAMCO/
 ```bash
 # Still inside /home/<ibmi-user>/IBM-i-Application-Modernization-with-Bob/SAMCO
 export lib1=SAMCO
+export PATH=/QOpenSys/pkgs/bin:$PATH
+yum install python39 (if throws error as python3 is not installed)
 system "ADDLIBLE LIB(SAMCO)"
 /QOpenSys/pkgs/bin/makei build
 ```
