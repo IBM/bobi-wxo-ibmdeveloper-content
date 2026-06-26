@@ -22,15 +22,15 @@ IBM Bob · PowerVS · PASE · AI agent · Mapepire · IBM Cloud
 - [Prerequisites](#prerequisites)
 - [Architecture](#architecture)
 - [Step 0 — Deploy the SAMCO demo schema on IBM i](#step-0--deploy-the-samco-demo-schema-on-ibm-i)
-- [Part 1 — Install Bob and connect to IBM i](#part-1--install-bob-and-connect-to-ibm-i)
-  - [Step 1. Install Bob and the IBM i Premium Package](#step-1-install-bob-and-the-ibm-i-premium-package)
-  - [Step 2. Install the Code for IBM i extension pack](#step-2-install-the-code-for-ibm-i-extension-pack)
-  - [Step 3. Create an IBM i connection in Bob](#step-3-create-an-ibm-i-connection-in-bob)
-- [Part 2 — Deploy the MCP Server on IBM i](#part-2--deploy-the-mcp-server-on-ibm-i)
-  - [Step 4. SSH into IBM i and install the MCP Server package](#step-4-ssh-into-ibm-i-and-install-the-mcp-server-package)
-  - [Step 5. Create the MCP Server configuration file](#step-5-create-the-mcp-server-configuration-file)
-  - [Step 6. Create the SQL tools definition file](#step-6-create-the-sql-tools-definition-file)
-  - [Step 7. Start the MCP Server as a PASE background process](#step-7-start-the-mcp-server-as-a-pase-background-process)
+- [Part 1 — Deploy the MCP Server on IBM i](#part-1--deploy-the-mcp-server-on-ibm-i)
+  - [Step 1. SSH into IBM i and install the MCP Server package](#step-1-ssh-into-ibm-i-and-install-the-mcp-server-package)
+  - [Step 2. Create the MCP Server configuration file](#step-2-create-the-mcp-server-configuration-file)
+  - [Step 3. Create the SQL tools definition file](#step-3-create-the-sql-tools-definition-file)
+  - [Step 4. Start the MCP Server as a PASE background process](#step-4-start-the-mcp-server-as-a-pase-background-process)
+- [Part 2 — Install Bob and connect to IBM i](#part-2--install-bob-and-connect-to-ibm-i)
+  - [Step 5. Install Bob and the IBM i Premium Package](#step-5-install-bob-and-the-ibm-i-premium-package)
+  - [Step 6. Install the Code for IBM i extension pack](#step-6-install-the-code-for-ibm-i-extension-pack)
+  - [Step 7. Create an IBM i connection in Bob](#step-7-create-an-ibm-i-connection-in-bob)
 - [Part 3 — Connect Bob to the running MCP Server](#part-3--connect-bob-to-the-running-mcp-server)
   - [Step 8. Configure the IBM i MCP Server in Bob](#step-8-configure-the-ibm-i-mcp-server-in-bob)
   - [Step 9. Verify the end-to-end connection using Bob](#step-9-verify-the-end-to-end-connection-using-bob)
@@ -140,7 +140,7 @@ By the end of this tutorial you will have:
       # scp without password prompt
       sshpass -p '<your-ibmi-password>' scp \
       tools/retail-services.yaml \
-        <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/samco-mcp/
+        <ibmi-user>@<your-ibmi-host>:/home/<ibmi-user>/mcp-server-pkg/
       ```
       > ⚠️ Avoid embedding passwords in shell history. Use an environment variable instead:
       > ```bash
@@ -283,56 +283,70 @@ DB2 for i tables. The source is published openly on GitHub:
 | `SAMCO."ORDER"` | Orders — note: `ORDER` is a DB2 reserved word, always double-quote it | 10 |
 | `SAMCO.DETORD` | Order lines (order id, year, line, article, qty, price) | 22 |
 
-### 0a — Prerequisites on the IBM i side
+### Prerequisites on the IBM i side
 
-Before cloning and building, ensure the following are installed on your IBM i:
+SSH into your IBM i system and set up the PASE environment. The `export PATH` line is
+**required first** — without it, `yum`, `git`, `node`, and `makei` will not be found:
 
 ```bash
-# SSH into IBM i, then verify:
-/QOpenSys/pkgs/bin/node --version    # Node.js v18+ required for later steps
-/QOpenSys/pkgs/bin/git --version     # git required for clone
-/QOpenSys/pkgs/bin/makei --version   # Tobi build tool required for compile
+sshpass -p '<your-ibmi-password>' ssh \
+  -o StrictHostKeyChecking=no \
+  -o PreferredAuthentications=password \
+  -o PubkeyAuthentication=no \
+  <ibmi-user>@<your-ibmi-host>
+
+# Make all IBM i open-source tools available in this shell session
+export PATH=/QOpenSys/pkgs/bin:$PATH
 ```
 
-If any are missing, install them via the IBM i Open Source Package Manager:
+Now verify the tools needed for this step are installed:
 
 ```bash
-# Install missing open-source tools via yum (requires 5733-OPS or ACS open-source mgmt)
+git --version     # required to clone the repository
+node --version    # Node.js v18+ required for later steps
+makei --version   # Tobi build tool required to compile the application
+```
+
+If any tool is missing, install it — the PATH export above makes `yum` available:
+
+```bash
 yum install git nodejs20 tobi
 ```
 
-> **Tobi** (`makei`) is the IBM i open-source build tool that reads the `iproj.json` project
-> file and compiles RPG, DDS, CL, and SQL source members in the correct order. Learn more at
-> [ibm.github.io/ibmi-tobi](https://ibm.github.io/ibmi-tobi/#/).
+> **Tobi** (`makei`) is the IBM i open-source build tool. It reads the `iproj.json` project
+> file and compiles RPG, DDS, CL, and SQL source members in the correct dependency order.
+> Learn more at [ibm.github.io/ibmi-tobi](https://ibm.github.io/ibmi-tobi/#/).
 
-### 0b — Create the target library
+### Create the target library
 
-Connect to IBM i via SSH and run:
+Still in the SSH/PASE session, create the `SAMCO` library:
 
 ```bash
-# Option A — from a 5250 session or IBM i command line
-CRTLIB LIB(SAMCO) TEXT('SAMCO Retail Demo Application')
-
-# Option B — from PASE shell (SSH session)
 system "CRTLIB LIB(SAMCO) TEXT('SAMCO Retail Demo Application')"
 ```
 
-Verify it was created:
+> If you have a 5250 session open instead, run the CL command directly:
+> ```
+> CRTLIB LIB(SAMCO) TEXT('SAMCO Retail Demo Application')
+> ```
+
+Verify the library was created:
 
 ```bash
 system "DSPLIB SAMCO"
-# Output should show: Library SAMCO  Type *PROD
+# Expected: Library SAMCO  Type *PROD
 ```
 
-### 0c — Clone the repository to IBM i PASE
+### Clone the repository to IBM i PASE
 
 ```bash
-# SSH into IBM i
-ssh <ibmi-user>@<your-ibmi-host>
-
-# Clone to your home directory
+# Navigate to your home directory
 cd /home/<ibmi-user>
+
+# Clone the SAMCO repository
 git clone https://github.com/bmarolleau/IBM-i-Application-Modernization-with-Bob.git
+
+# Change into the SAMCO source directory
 cd IBM-i-Application-Modernization-with-Bob/SAMCO
 ```
 
@@ -350,16 +364,22 @@ SAMCO/
 └── QCLSRC/                      ← CL programs
 ```
 
-### 0d — Build the application (compile all objects)
+### Build the application
+
+From inside the `SAMCO/` directory, set the required environment variables, then build:
 
 ```bash
-# Still inside /home/<ibmi-user>/IBM-i-Application-Modernization-with-Bob/SAMCO
 export lib1=SAMCO
 export PATH=/QOpenSys/pkgs/bin:$PATH
-yum install python39 (if throws error as python3 is not installed)
 system "ADDLIBLE LIB(SAMCO)"
 /QOpenSys/pkgs/bin/makei build
 ```
+
+> ⚠️ If the build fails with `python3: not found`, install it first (PATH is already set above):
+> ```bash
+> yum install python39
+> ```
+> Then re-run `makei build`.
 
 Expected output:
 
@@ -371,11 +391,12 @@ Expected output:
 Build complete — 0 errors
 ```
 
-> ℹ️ Some programs may have minor warnings related to dependencies. The DB2 tables and all
-> data-serving programs compile cleanly. If a display-file program fails, it does not affect
-> the MCP integration — the MCP server only needs the DB2 tables, not the green-screen programs.
+> ℹ️ Some programs may produce minor warnings related to optional dependencies. The DB2 tables
+> and all data-serving programs compile cleanly. If a display-file program fails, it does **not**
+> affect the MCP integration — the MCP server only needs the DB2 tables, not the green-screen
+> programs.
 
-### 0e — Populate the DB2 tables with sample data
+### Populate the DB2 tables with sample data
 
 ```bash
 system "RUNSQLSTM SRCSTMF('/home/<ibmi-user>/IBM-i-Application-Modernization-with-Bob/SAMCO/POPULATE_SAMCO_TABLES.sql') COMMIT(*NONE)"
@@ -383,9 +404,9 @@ system "RUNSQLSTM SRCSTMF('/home/<ibmi-user>/IBM-i-Application-Modernization-wit
 
 This inserts all demo rows: 33 articles, 10 categories, 10 customers, 10 orders, 22 order lines.
 
-### 0f — Verify the data is live
+### Verify the data is live
 
-Run a quick spot-check from PASE using the `db2` CLI or from an ACS Run SQL Scripts session:
+Run a quick spot-check from your PASE/SSH session or from an ACS **Run SQL Scripts** window:
 
 ```sql
 SELECT COUNT(*) AS CNT, 'ARTICLE'  AS TBL FROM SAMCO.ARTICLE  UNION ALL
@@ -409,103 +430,15 @@ CNT   TBL
 
 > ⚠️ **`ORDER` is a DB2 reserved word.** Always write `SAMCO."ORDER"` with double quotes in
 > every SQL statement. Writing `SAMCO.ORDER` will produce a syntax error on IBM i. This rule
-> applies throughout this tutorial and in the MCP tools YAML in Step 8.
+> applies throughout this tutorial and in the MCP tools YAML in Step 6.
 
 Once all five row counts match, SAMCO is fully deployed and ready for the MCP server in Part 2.
 
-## Part 1 — Install Bob and connect to IBM i
+## Part 1 — Deploy the MCP Server on IBM i
 
-This part covers the one-time setup of Bob with the IBM i plugins and establishing a live
-connection to the IBM i system. Steps 1–3 require only your Mac — no IBM i interaction yet.
-
-### Step 1. Install Bob and the IBM i Premium Package
-
-1. Download and install **Bob IDE** (the VS Code-based IBM AI developer assistant).
-
-2. Launch Bob and sign in with your **IBMid**. If you do not have an IBMid, create one at
-   [ibm.com/account](https://www.ibm.com/account).
-
-3. Install the **IBM i Premium Package for Bob** (`.vsix` file):
-   - In Bob, press `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) → **Extensions: Install from VSIX…**
-   - Select the `bob-premium-ibmi-*.vsix` file provided by your instructor or IBM representative
-   - Reload Bob when prompted
-  
-  ![image-1](doc/src/images/1.png)
-
-4. Verify installation — the following should now be available in the **mode selector**
-   (top-right of the Bob chat panel):
-   - **ℹ️ IBM i Developer** — for RPG, CL, DDS, compile actions, schema exploration
-   - **🛢️ IBM i Database** — for DB2 for i SQL generation and optimization
-  
-  ![image-2](doc/src/images/2.png)
-
-> **What the IBM i Premium Package adds:**
-> IBM i Developer and Database modes, 34 auto-loading IBM i skills (RPG, CL, DDS, DB2),
-> built-in workflows (DDS to SQL, Fixed to Free), slash commands (`/erd`), live schema
-> context injection, and all IBM i-specific tools (`read_member`, `execute_cl_command`,
-> `execute_sql_statement`, `convert_rpg_source`, and more).
-
-### Step 2. Install the Code for IBM i extension pack
-
-The **Code for IBM i** extension is what gives Bob (and VS Code) the ability to connect to
-an IBM i system, browse libraries and members, and execute compile actions.
-
-In Bob, open the Extensions panel (`Ctrl+Shift+X`) and install:
-
-| Extension | Purpose |
-|-----------|---------|
-| **IBM i Development Pack** | Meta-pack that installs the full set of IBM i extensions |
-| **Code for IBM i** (included in pack) | IBM i connection, library/member browser, compile actions |
-| **Db2 for i** (included in pack) | SQL execution panel with result set viewer |
-
-Alternatively, install each `.vsix` file manually if provided by your instructor:
-```
-Ctrl+Shift+P → Extensions: Install from VSIX… → select file
-```
-
-> Refer to the [Code for IBM i documentation](https://codefori.github.io/docs/) for full
-> installation details and screenshots.
-
-### Step 3. Create an IBM i connection in Bob
-
-1. In the left sidebar of Bob, click the **IBM i icon** (the panel added by Code for IBM i).
-
-  ![image-3](doc/src/images/3.png)
-
-2. Click **New Connection** and enter your system details:
-
-   | Field | Value |
-   |-------|-------|
-   | **Host** | `<your-ibmi-host>` (your IBM i hostname or IP) |
-   | **User** | `<IBMI-USER>` (IBM i user profiles are uppercase) |
-   | **Password** | your IBM i password |
-   | **Port** | `22` (SSH — default) |
-  
-  ![image-4](doc/src/images/4.png)
-
-3. Click **Connect**. On first connection, Bob may prompt you to accept the host key — click
-   **Accept**.
-  
-  ![image-6](doc/src/images/6.png)
-
-4. Once connected, expand the **User Library List** in the left sidebar and click on **Add Library to list** and enter `SAMCO` in the text box.
-
-  ![image-8](doc/src/images/8.png)
-> ⚠️ **Why this matters:** Without SAMCO in the library list, Bob's `execute_sql_statement`
-> calls that use unqualified table names will fail with *object not found*. Always use fully
-> qualified names (`SAMCO.ARTICLE`) in the SQL tools YAML — and confirm SAMCO is in the
-> library list before running verification queries in Part 4.
-
-> **PowerVS note:** If your IBM i is on IBM Cloud PowerVS with only a public IP and you need
-> a 5250 terminal session from your workstation, you may need an SSH tunnel. Ask your IBM
-> administrator or see the
-> [PowerVS SSH tunnel guide](https://cloud.ibm.com/docs/power-iaas?topic=power-iaas-connect-ibmi#ssh-tunneling).
-
-## Part 2 — Deploy the MCP Server on IBM i
-
-This part deploys the MCP server as a persistent HTTP service directly on the IBM i,
-so that watsonx Orchestrate can call it remotely. All commands in this part run **on
-the IBM i via SSH** from your local Mac — unless explicitly stated otherwise.
+This part completes all IBM i setup. The MCP server is deployed as a persistent HTTP
+service on the IBM i itself. All commands run **on the IBM i via SSH** — stay in that
+terminal until Step 4 is done.
 
 > Note: **Why run the MCP server on the IBM i itself?**
 > The MCP server connects to DB2 via Mapepire on `localhost:8076`. Running it directly
@@ -513,9 +446,9 @@ the IBM i via SSH** from your local Mac — unless explicitly stated otherwise.
 > between machines, and no credentials transmitted over the network. The only external
 > port exposed is the MCP HTTP port (3011).
 
-### Step 4. SSH into IBM i and install the MCP Server package
+### Step 1. SSH into IBM i and install the MCP Server package
 
-#### 4.1 — Open an SSH session from your Mac
+#### 1.1 — Open an SSH session from your Mac
 
 - Open a terminal on your Mac and connect to the IBM i:
   ```bash
@@ -537,7 +470,7 @@ the IBM i via SSH** from your local Mac — unless explicitly stated otherwise.
   > nc -zv <your-ibmi-host> 22
   > ```
 
-#### 4.2 — Set up the PASE environment in IBM i
+#### 1.2 — Set up the PASE environment in IBM i
 
 - Once connected, add the IBM i open-source tools to your PATH. This makes `node`, `npm`,
 `git`, and other PASE tools available without typing the full path each time:
@@ -561,7 +494,7 @@ the IBM i via SSH** from your local Mac — unless explicitly stated otherwise.
   > yum install nodejs20
   > ```
 
-#### 4.3 - Clone the repository to get the files
+#### 1.3 — Clone the repository to get the files
 
 - In IBM i terminal, run the following command to clone the repo with all the files:
 
@@ -575,7 +508,7 @@ the IBM i via SSH** from your local Mac — unless explicitly stated otherwise.
   cd bobi-wxo-ibmdeveloper-content/
   ```
 
-#### 4.4 — Install the IBM i MCP Server npm package
+#### 1.4 — Install the IBM i MCP Server npm package
 
 - Navigate to the **mcp-server-pkg** directoy:
 
@@ -602,11 +535,11 @@ npm will show download progress. Expected final lines:
 
 ---
 
-### Step 5. Create the MCP Server configuration file
+### Step 2. Create the MCP Server configuration file
 
 Still on the IBM i (SSH session), create the `.env` configuration file.
 
-#### 5.1 — Verify Mapepire is running on port 8076
+#### 2.1 — Verify Mapepire is running on port 8076
 
 Before writing the config, confirm Mapepire is available — the MCP server cannot start
 without it:
@@ -627,13 +560,13 @@ STRTCPSVR SERVER(*MEPIRE)
 ```
 or contact your IBM i administrator.
 
-#### 5b — Write the .env file
+#### 2.2 — Write the .env file
 
-Create `/home/<ibmi-user>/samco-mcp/.env` with the following content.
+Create `/home/<ibmi-user>/mcp-server-pkg/.env` with the following content.
 Use `cat` with a here-document to write it in one command from the SSH session:
 
 ```bash
-cat > /home/<ibmi-user>/samco-mcp/.env << 'EOF'
+cat > /home/<ibmi-user>/mcp-server-pkg/.env << 'EOF'
 # =============================================================
 # IBM i MCP Server — SAMCO Retail demo configuration
 # =============================================================
@@ -661,10 +594,10 @@ EOF
 
 Verify the file was written correctly:
 ```bash
-cat /home/<ibmi-user>/samco-mcp/.env
+cat /home/<ibmi-user>/mcp-server-pkg/.env
 ```
 
-#### 5c — Configuration values explained
+#### 2.3 — Configuration values explained
 
 | Parameter | Value | Why |
 |-----------|-------|-----|
@@ -679,12 +612,12 @@ cat /home/<ibmi-user>/samco-mcp/.env
 > ⚠️ **Security note:** The `.env` file contains the DB2 password in plain text. Restrict
 > its permissions immediately:
 > ```bash
-> chmod 600 /home/<ibmi-user>/samco-mcp/.env
+> chmod 600 /home/<ibmi-user>/mcp-server-pkg/.env
 > ```
 
 ---
 
-### Step 6. Create the SQL tools definition file
+### Step 3. Create the SQL tools definition file
 
 Still in the SSH session, create the `retail-services.yaml` file.
 This file is the heart of the MCP server — it defines exactly which DB2 queries are
@@ -693,10 +626,10 @@ exposed as tools and how the LLM should describe and call them.
 Bob generates this file by introspecting the live DB2 schema and applying all
 IBM i-specific SQL conventions automatically.
 
-#### 6a — Write the complete retail-services.yaml
+#### 3.1 — Write the complete retail-services.yaml
 
 ```bash
-cat > /home/<ibmi-user>/samco-mcp/retail-services.yaml << 'EOF'
+cat > /home/<ibmi-user>/mcp-server-pkg/retail-services.yaml << 'EOF'
 # =============================================================================
 # SAMCO Demo — SQL Tool Definitions for the IBM i MCP Server
 #
@@ -992,7 +925,7 @@ toolsets:
 EOF
 ```
 
-#### 6b — IBM i-specific SQL conventions applied in every tool
+#### 3.2 — IBM i-specific SQL conventions applied in every tool
 
 **1. Bind variables, not string concatenation — prevents SQL injection:**
 ```sql
@@ -1025,7 +958,7 @@ LIKE '%' CONCAT UPPER(:keyword) CONCAT '%'    ✅  DB2 for i
 LIKE '%' || UPPER(:keyword) || '%'            ✅  also valid, but CONCAT is more portable
 ```
 
-#### 6c — The 8 tools at a glance
+#### 3.3 — The 8 tools at a glance
 
 | # | Tool name | Tables used | What it answers |
 |---|-----------|-------------|-----------------|
@@ -1040,23 +973,23 @@ LIKE '%' || UPPER(:keyword) || '%'            ✅  also valid, but CONCAT is mor
 
 Verify the file was written:
 ```bash
-wc -l /home/<ibmi-user>/samco-mcp/retail-services.yaml
+wc -l /home/<ibmi-user>/mcp-server-pkg/retail-services.yaml
 # Expected: ~130 lines
 
-head -5 /home/<ibmi-user>/samco-mcp/retail-services.yaml
+head -5 /home/<ibmi-user>/mcp-server-pkg/retail-services.yaml
 # Expected: the header comment block
 ```
 
 ---
 
-### Step 7. Start the MCP Server as a PASE background process
+### Step 4. Start the MCP Server as a PASE background process
 
 Still in the SSH session on IBM i, start the server.
 
-#### 7a — Verify both files exist before starting
+#### 4.1 — Verify both files exist before starting
 
 ```bash
-ls -la /home/<ibmi-user>/samco-mcp/
+ls -la /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/
 # Expected files:
 #   .env
 #   retail-services.yaml
@@ -1064,11 +997,11 @@ ls -la /home/<ibmi-user>/samco-mcp/
 #   package.json
 ```
 
-#### 7b — Start the server
+#### 4.2 — Start the server
 
 ```bash
 export PATH=/QOpenSys/pkgs/bin:$PATH
-cd /home/<ibmi-user>/samco-mcp
+cd /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg
 
 # Load .env variables into the current shell
 set -o allexport
@@ -1092,7 +1025,7 @@ Expected output:
 MCP server started — PID 12345
 ```
 
-#### 7c — Verify the server is running
+#### 4.3 — Verify the server is running
 
 Check the process is alive:
 ```bash
@@ -1117,7 +1050,7 @@ Expected log output (first few lines):
 [INFO] Server ready.
 ```
 
-#### 7d — Send a live MCP protocol test request
+#### 4.4 — Send a live MCP protocol test request
 
 From the SSH session on IBM i, confirm the server handles a real MCP `initialize` handshake:
 
@@ -1145,7 +1078,7 @@ data: {"result":{"protocolVersion":"2024-11-05",
        "capabilities":{"tools":{}}},"jsonrpc":"2.0","id":1}
 ```
 
-#### 7e — Verify the port is reachable from your Mac
+#### 4.5 — Verify the port is reachable from your Mac
 
 Open a **new terminal on your Mac** (keep the SSH session open in a separate tab) and run:
 
@@ -1159,25 +1092,114 @@ curl -s http://<your-ibmi-host>:3011/mcp \
 
 Same response as above = port 3011 is reachable from your Mac ✅
 
-#### 7f — Day-to-day server management
+#### 4.6 — Day-to-day server management
 
 ```bash
 # Check if the server is still running
-kill -0 $(cat /home/<ibmi-user>/samco-mcp/mcp-server.pid) && echo "RUNNING" || echo "NOT RUNNING"
+kill -0 $(cat /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/mcp-server.pid) && echo "RUNNING" || echo "NOT RUNNING"
 
 # Follow live logs
-tail -f /home/<ibmi-user>/samco-mcp/mcp-server.log
+tail -f /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/mcp-server.log
 
 # Stop the server gracefully
-kill $(cat /home/<ibmi-user>/samco-mcp/mcp-server.pid)
-rm /home/<ibmi-user>/samco-mcp/mcp-server.pid
+kill $(cat /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/mcp-server.pid)
+rm /home/<ibmi-user>/bobi-wxo-ibmdeveloper-content/mcp-server-pkg/mcp-server.pid
 
-# Restart (run 9b again)
+# Restart (run Step 4.2 again)
 ```
 
 > ℹ️ The server will stop if the IBM i is IPLed or if the PASE job ends. For a persistent
 > production service, run it as an IBM i subsystem job or use `SBMJOB` to submit it to a
-> batch queue. For the demo, re-running Step 9b after each SSH session is sufficient.
+> batch queue. For the demo, re-running Step 4.2 after each SSH session is sufficient.
+
+---
+
+## Part 2 — Install Bob and connect to IBM i
+
+All IBM i terminal work is now complete. Switch to your Mac for the one-time Bob setup.
+Steps 5–7 require only your Mac.
+
+### Step 5. Install Bob and the IBM i Premium Package
+
+1. Download and install **Bob IDE** (the VS Code-based IBM AI developer assistant).
+
+2. Launch Bob and sign in with your **IBMid**. If you do not have an IBMid, create one at
+   [ibm.com/account](https://www.ibm.com/account).
+
+3. Install the **IBM i Premium Package for Bob** (`.vsix` file):
+   - In Bob, press `Ctrl+Shift+P` (Mac: `Cmd+Shift+P`) → **Extensions: Install from VSIX…**
+   - Select the `bob-premium-ibmi-*.vsix` file provided by your instructor or IBM representative
+   - Reload Bob when prompted
+  
+  ![image-1](doc/src/images/1.png)
+
+4. Verify installation — the following should now be available in the **mode selector**
+   (top-right of the Bob chat panel):
+   - **ℹ️ IBM i Developer** — for RPG, CL, DDS, compile actions, schema exploration
+   - **🛢️ IBM i Database** — for DB2 for i SQL generation and optimization
+  
+  ![image-2](doc/src/images/2.png)
+
+> **What the IBM i Premium Package adds:**
+> IBM i Developer and Database modes, 34 auto-loading IBM i skills (RPG, CL, DDS, DB2),
+> built-in workflows (DDS to SQL, Fixed to Free), slash commands (`/erd`), live schema
+> context injection, and all IBM i-specific tools (`read_member`, `execute_cl_command`,
+> `execute_sql_statement`, `convert_rpg_source`, and more).
+
+### Step 6. Install the Code for IBM i extension pack
+
+The **Code for IBM i** extension is what gives Bob (and VS Code) the ability to connect to
+an IBM i system, browse libraries and members, and execute compile actions.
+
+In Bob, open the Extensions panel (`Ctrl+Shift+X`) and install:
+
+| Extension | Purpose |
+|-----------|---------|
+| **IBM i Development Pack** | Meta-pack that installs the full set of IBM i extensions |
+| **Code for IBM i** (included in pack) | IBM i connection, library/member browser, compile actions |
+| **Db2 for i** (included in pack) | SQL execution panel with result set viewer |
+
+Alternatively, install each `.vsix` file manually if provided by your instructor:
+```
+Ctrl+Shift+P → Extensions: Install from VSIX… → select file
+```
+
+> Refer to the [Code for IBM i documentation](https://codefori.github.io/docs/) for full
+> installation details and screenshots.
+
+### Step 7. Create an IBM i connection in Bob
+
+1. In the left sidebar of Bob, click the **IBM i icon** (the panel added by Code for IBM i).
+
+  ![image-3](doc/src/images/3.png)
+
+2. Click **New Connection** and enter your system details:
+
+   | Field | Value |
+   |-------|-------|
+   | **Host** | `<your-ibmi-host>` (your IBM i hostname or IP) |
+   | **User** | `<IBMI-USER>` (IBM i user profiles are uppercase) |
+   | **Password** | your IBM i password |
+   | **Port** | `22` (SSH — default) |
+  
+  ![image-4](doc/src/images/4.png)
+
+3. Click **Connect**. On first connection, Bob may prompt you to accept the host key — click
+   **Accept**.
+  
+  ![image-6](doc/src/images/6.png)
+
+4. Once connected, expand the **User Library List** in the left sidebar, click **Add Library to list**, and enter `SAMCO`.
+
+  ![image-8](doc/src/images/8.png)
+
+> ⚠️ **Why this matters:** Without SAMCO in the library list, Bob's `execute_sql_statement`
+> calls that use unqualified table names will fail with *object not found*. Always use fully
+> qualified names (`SAMCO.ARTICLE`) in the SQL tools YAML.
+
+> **PowerVS note:** If your IBM i is on IBM Cloud PowerVS with only a public IP and you need
+> a 5250 terminal session, you may need an SSH tunnel. See the
+> [PowerVS SSH tunnel guide](https://cloud.ibm.com/docs/power-iaas?topic=power-iaas-connect-ibmi#ssh-tunneling).
 
 ---
 
